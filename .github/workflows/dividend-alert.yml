@@ -29,14 +29,14 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: python dividend_alert.py
-        - name: Test Telegram
+
+      - name: Test Telegram
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            -d "chat_id=${CHAT_ID}" \
-            --data-urlencode "text=✅ GitHub Telegram Test - Dividend Alert Bot is connected!"
+          python -c "import os, requests; r=requests.post('https://api.telegram.org/bot' + os.environ['BOT_TOKEN'] + '/sendMessage', data={'chat_id': os.environ['CHAT_ID'], 'text': '✅ GitHub Telegram Test - Dividend Alert Bot is connected!'}); print(r.status_code); print(r.text)"
+
       - name: Save seen announcements
         run: |
           git config user.name "github-actions[bot]"
