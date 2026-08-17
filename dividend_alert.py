@@ -7,6 +7,7 @@ BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
 SEEN_FILE = "seen_dividends.json"
+BASELINE_FILE = "baseline_done.txt"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
@@ -29,6 +30,7 @@ def send_telegram(message):
     )
 
     print("Telegram:", response.status_code)
+
     return response.ok
 
 
@@ -48,7 +50,7 @@ def save_seen(seen):
         json.dump(list(seen), f)
 
 
-def check_dividends():
+def get_nse_announcements():
     session = requests.Session()
     session.headers.update(HEADERS)
 
@@ -65,10 +67,17 @@ def check_dividends():
 
     print("NSE response:", response.status_code)
 
-    data = response.json()
-    seen = load_seen()
+    response.raise_for_status()
 
-    new_count = 0
+    return response.json()
+
+
+def check_dividends():
+
+    data = get_nse_announcements()
+
+    seen = load_seen()
+    found = []
 
     for item in data:
 
@@ -84,14 +93,49 @@ def check_dividends():
 
         unique_id = f"{symbol}|{subject}|{broadcast}"
 
+        found.append(
+            (
+                unique_id,
+                symbol,
+                subject,
+                details,
+                broadcast
+            )
+        )
+
+    print("Dividend records found:", len(found))
+
+    # First run:
+    # Existing announcements ko alert nahi karna.
+    # Sirf baseline save karna.
+    if not os.path.exists(BASELINE_FILE):
+
+        for unique_id, symbol, subject, details, broadcast in found:
+            seen.add(unique_id)
+
+        save_seen(seen)
+
+        with open(BASELINE_FILE, "w", encoding="utf-8") as f:
+            f.write("baseline created")
+
+        print("Initial NSE data saved.")
+        print("No alerts sent on first run.")
+
+        return
+
+    new_count = 0
+
+    for unique_id, symbol, subject, details, broadcast in found:
+
         if unique_id in seen:
             continue
 
         message = (
             "🚨 DIVIDEND ALERT 🚨\n\n"
-            f"🏢 Company/Symbol: {symbol}\n"
-            f"📢 Announcement: {subject}\n"
-            f"📅 Date: {broadcast}\n\n"
+            f"🏢 Company/Symbol: {symbol}\n\n"
+            f"📢 Announcement:\n{subject}\n\n"
+            f"📅 Announcement Date:\n{broadcast}\n\n"
+            f"📝 Details:\n{details[:1500]}\n\n"
             "🔗 Source: NSE India"
         )
 
@@ -101,8 +145,12 @@ def check_dividends():
 
     save_seen(seen)
 
-    print(f"New dividend alerts: {new_count}")
+    print("New dividend alerts:", new_count)
 
+
+print("=" * 35)
+print("      DIVIDEND ALERT BOT")
+print("=" * 35)
 
 print(
     "Checking NSE:",
@@ -113,3 +161,4 @@ try:
     check_dividends()
 except Exception as e:
     print("ERROR:", e)
+    raise
